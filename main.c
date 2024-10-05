@@ -1,12 +1,11 @@
 #include "raylib.h"
 
-
-class Player
+struct Player
 {
-   public:
-   Player();
-};
-
+    Rectangle rec;
+    Vector2   speed;
+    Color     color;
+} Player;
 
 int main(void)
 {
@@ -21,7 +20,7 @@ int main(void)
     //--------------------------------------------------------------------------------------
 
     // Main game loop
-    while (!WindowShouldClose())    // Detect window close button or ESC key
+    while ( !WindowShouldClose() )   // Detect window close button or ESC key
     {
         // Update
         //----------------------------------------------------------------------------------
@@ -32,9 +31,10 @@ int main(void)
         //----------------------------------------------------------------------------------
         BeginDrawing();
 
-            ClearBackground(RAYWHITE);
+        ClearBackground( RAYWHITE );
 
-            DrawText("Congrats! You created your first window!", 190, 200, 20, LIGHTGRAY);
+        DrawText( "Congrats! You created your first window!", 190, 200, 20,
+                  LIGHTGRAY );
 
         EndDrawing();
         //----------------------------------------------------------------------------------
