@@ -29,13 +29,13 @@ target_link_libraries(main
     glfw
     -lm
     -lpthread
-	"-framework CoreFoundation"
+    "-framework CoreFoundation"
     "-framework Cocoa"
     "-framework IOKit"
     "-framework OpenGL"
 )
 
-# Add ctags generation (optional)
+#Add ctags generation (optional)
 find_program(CTAGS_EXECUTABLE ctags)
 if(CTAGS_EXECUTABLE)
     add_custom_target(tags
