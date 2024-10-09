@@ -1,13 +1,24 @@
+// I have no idea what i am doing
+// Some code does nothing because i took a existing project and deleted stuff
 #include "raylib.h"
+#include <math.h>
 #include <stdbool.h>
 #include <stdlib.h>
 
 //--------------------------------------------------------------------------------------
-#define NUM_SHOOTS      50
-#define NUM_MAX_ENEMIES 50
-#define FIRST_WAVE      10
-#define SECOND_WAVE     20
-#define THIRD_WAVE      50
+#define FIRST_LEVEL  50
+#define SECOND_LEVEL 20
+
+#define WIN_PERCENTAGE 80
+
+enum DIRECTION
+{
+   DIRECTION_UP,
+   DIRECTION_RIGHT,
+   DIRECTION_DOWN,
+   DIRECTION_LEFT,
+   DIRECTION_NONE
+};
 
 //--------------------------------------------------------------------------------------
 typedef struct Player
@@ -18,7 +29,20 @@ typedef struct Player
     Vector2   startLinePos;
     Vector2   endLinePos;
     bool      isDrawing;
+    enum DIRECTION direction;
 } Player;
+
+//--------------------------------------------------------------------------------------
+/// Holds the area to be cut
+typedef struct Board
+{
+   Rectangle rec;
+   float
+       cutOffPercent;   // Initially it is 0 because we did not cut an anything
+   Color color;
+   float initialArea;
+   float cutOffArea;
+} Board;
 
 //--------------------------------------------------------------------------------------
 static const int screenWidth  = 800;
@@ -37,6 +61,22 @@ static Sound  secondSound;
 static Sound  endingSound;
 static bool   soundFlag;
 
+static Board board = { 0 };
+
+struct Circle
+{
+   int   centerX;
+   int   centerY;
+   float radius;
+   Color color;
+} Circle;
+
+static struct Circle c1;
+static struct Circle c2;
+static struct Circle c3;
+static struct Circle c4;
+static struct Circle c5;
+
 ////------------------------------------------------------------------------------------
 //// Module Functions Declaration (local)
 ////------------------------------------------------------------------------------------
@@ -45,27 +85,26 @@ static void UpdateGame( void );        // Update game (one frame)
 static void DrawGame( void );          // Draw game (one frame)
 static void UnloadGame( void );        // Unload game
 static void UpdateDrawFrame( void );   // Update and Draw (one frame)
+static int  isRecBigger( const Rectangle* rec1, const Rectangle* rec2 );
 
 int main(void)
 {
-    // Initialization
-    //--------------------------------------------------------------------------------------
-    const int screenWidth  = 800;
-    const int screenHeight = 600;
+   // Initialization
+   //--------------------------------------------------------------------------------------
 
-    InitWindow( screenWidth, screenHeight, "Shoot me baby" );
-    InitAudioDevice();
-    SetMasterVolume( 100.0 );
+   InitWindow( screenWidth, screenHeight, "Shoot me baby" );
+   InitAudioDevice();
+   SetMasterVolume( 100.0 );
 
-    InitGame();
+   InitGame();
 
-    SetTargetFPS( 60 );   // Set our game to run at 60
+   SetTargetFPS( 60 );   // Set our game to run at 60
 
-    // Main game loop
-    while ( !WindowShouldClose() )   // Detect window close button or ESC key
-    {
-        UpdateDrawFrame();
-    }
+   // Main game loop
+   while ( !WindowShouldClose() )   // Detect window close button or ESC key
+   {
+      UpdateDrawFrame();
+   }
 
     UnloadGame();
 
@@ -101,6 +140,16 @@ void InitGame( void )
     player.endLinePos.x   = 0;
     player.endLinePos.y   = 0;
     player.isDrawing      = false;
+
+    player.direction = DIRECTION_NONE;
+
+    board.rec.x         = screenWidth / 2 - 200;
+    board.rec.y         = screenHeight / 2 - 200;
+    board.rec.width     = 400;
+    board.rec.height    = 400;
+    board.initialArea   = board.rec.width * board.rec.height;
+    board.cutOffPercent = 0;
+    board.color         = SKYBLUE;
 
     Wave w1 = LoadWave( "sound/First.wav" );
     Wave w2 = LoadWave( "sound/Second.wav" );
@@ -156,17 +205,119 @@ void UpdateGame( void )
         {
             alphaDecrease = true;
         }
-        else if ( alpha <= 0.00f )
-        {
-            alphaDecrease = false;
-        }
 
-        if ( IsKeyPressed( KEY_SPACE ) && player.isDrawing == true )
+        if ( player.isDrawing == true &&
+             !CheckCollisionPointRec( ( Vector2 ){ player.rec.x, player.rec.y },
+                                      board.rec ) )
         {
             player.isDrawing = false;
+            // At this point i know i have cut the board into two pieces
+            // Check which area is the bigger
+            Rectangle rec1;
+            Rectangle rec2;
+            switch ( player.direction )
+            {
+            case DIRECTION_RIGHT:
+            {
+               rec1.x      = board.rec.x;
+               rec1.y      = board.rec.y;
+               rec1.width  = fabsf( player.endLinePos.x - board.rec.x );
+               rec1.height = fabsf( player.startLinePos.y - board.rec.y );
+
+               rec2.x      = player.startLinePos.x;
+               rec2.y      = player.startLinePos.y;
+               rec2.width  = fabsf( player.endLinePos.x - board.rec.x );
+               rec2.height = fabsf( board.rec.y + board.rec.height -
+                                    player.startLinePos.y );
+               break;
+            }
+            case DIRECTION_LEFT:
+            {
+               rec1.x = player.endLinePos.x;
+               rec1.y = board.rec.y;
+               rec1.width =
+                   fabsf( player.startLinePos.x - player.endLinePos.x );
+               rec1.height = fabsf( player.startLinePos.y - board.rec.y );
+
+               rec2.x = player.endLinePos.x;
+               rec2.y = player.startLinePos.y;
+               rec2.width =
+                   fabsf( board.rec.x + board.rec.width - player.endLinePos.x );
+               rec2.height = fabsf( board.rec.y + board.rec.height -
+                                    player.endLinePos.y );
+               break;
+            }
+            case DIRECTION_DOWN:
+            {
+               rec1.x     = board.rec.x;
+               rec1.y     = board.rec.y;
+               rec1.width = fabsf( player.startLinePos.x - board.rec.x );
+               rec1.height =
+                   fabsf( player.startLinePos.y - player.endLinePos.y );
+
+               rec2.x     = player.startLinePos.x;
+               rec2.y     = player.startLinePos.y;
+               rec2.width = fabsf( board.rec.x + board.rec.width -
+                                   player.startLinePos.x );
+               rec2.height =
+                   fabsf( player.startLinePos.y - player.endLinePos.y );
+               break;
+            }
+            case DIRECTION_UP:
+            {
+               rec1.x     = board.rec.x;
+               rec1.y     = board.rec.y;
+               rec1.width = fabsf( player.startLinePos.x - board.rec.x );
+               rec1.height =
+                   fabsf( player.startLinePos.y - player.endLinePos.y );
+
+               rec2.x     = player.endLinePos.x;
+               rec2.y     = player.endLinePos.y;
+               rec2.width = fabsf( board.rec.x + board.rec.width -
+                                   player.startLinePos.x );
+               rec2.height =
+                   fabsf( player.startLinePos.y - player.endLinePos.y );
+               break;
+            }
+            default:
+            {
+               // Wtf is happening
+            }
+            }
+
+            player.direction = DIRECTION_NONE;
+            // Remove smaller area
+            // Update new board rec
+
+            switch ( isRecBigger( &rec1, &rec2 ) )
+            {
+            case 1:
+               board.rec = rec1;
+               board.cutOffArea += rec2.width * rec2.height;
+               break;
+            case 2:
+               board.rec = rec2;
+               board.cutOffArea += rec1.width * rec1.height;
+               break;
+            case 0:
+               board.rec = rec1;
+               board.cutOffArea += rec1.width * rec1.height;
+               break;
+            }
+
+            board.cutOffPercent =
+                ( ( board.cutOffArea ) * 100 ) / board.initialArea;
+
+            score = board.cutOffPercent;
+            if ( score >= WIN_PERCENTAGE )
+            {
+               victory = true;
+            }
         }
 
-        if ( IsKeyPressed( KEY_SPACE ) && player.isDrawing == false )
+        if ( player.isDrawing == false &&
+             CheckCollisionPointRec( ( Vector2 ){ player.rec.x, player.rec.y },
+                                     board.rec ) )
         {
             player.startLinePos.x = player.rec.x;
             player.startLinePos.y = player.rec.y;
@@ -180,47 +331,78 @@ void UpdateGame( void )
         }
 
         // Player movement
-        if ( IsKeyDown( KEY_RIGHT ) )
+        if ( player.direction == DIRECTION_NONE ||
+             !CheckCollisionPointRec( ( Vector2 ){ player.rec.x, player.rec.y },
+                                      board.rec ) )
         {
-            player.rec.x += player.speed.x;
-            score += player.rec.x;
+           if ( IsKeyDown( KEY_RIGHT ) )
+           {
+              player.rec.x += player.speed.x;
+              player.direction = DIRECTION_RIGHT;
+           }
+           else if ( IsKeyDown( KEY_LEFT ) )
+           {
+              player.rec.x -= player.speed.x;
+              player.direction = DIRECTION_LEFT;
+           }
+           else if ( IsKeyDown( KEY_UP ) )
+           {
+              player.rec.y -= player.speed.y;
+              player.direction = DIRECTION_UP;
+           }
+           else if ( IsKeyDown( KEY_DOWN ) )
+           {
+              player.rec.y += player.speed.y;
+              player.direction = DIRECTION_DOWN;
+           }
         }
-        if ( IsKeyDown( KEY_LEFT ) )
+        else
         {
-            player.rec.x -= player.speed.x;
-            score -= player.rec.x;
-        }
-        if ( IsKeyDown( KEY_UP ) )
-        {
-            player.rec.y -= player.speed.y;
-            score += player.rec.y;
-        }
-        if ( IsKeyDown( KEY_DOWN ) )
-        {
-            player.rec.y += player.speed.y;
-            score -= player.rec.y;
+           switch ( player.direction )
+           {
+           case DIRECTION_UP:
+           {
+              player.rec.y -= player.speed.y;
+              break;
+           }
+           case DIRECTION_RIGHT:
+           {
+              player.rec.x += player.speed.x;
+              break;
+           }
+           case DIRECTION_DOWN:
+           {
+              player.rec.y += player.speed.y;
+              break;
+           }
+           case DIRECTION_LEFT:
+           {
+              player.rec.x -= player.speed.x;
+              break;
+           }
+           default:
+           {
+              TraceLog( LOG_INFO, "Wtf direction u going" );
+           }
+           }
         }
 
         // Wall behaviour
         if ( player.rec.x <= 0 )
         {
-            score        = 0;
-            player.rec.x = 0;
+           player.rec.x = 0;
         }
         if ( player.rec.x + player.rec.width >= screenWidth )
         {
-            score        = 0;
-            player.rec.x = screenWidth - player.rec.width;
+           player.rec.x = screenWidth - player.rec.width;
         }
         if ( player.rec.y <= 0 )
         {
-            score        = 0;
-            player.rec.y = 0;
+           player.rec.y = 0;
         }
         if ( player.rec.y + player.rec.height >= screenHeight )
         {
-            score        = 0;
-            player.rec.y = screenHeight - player.rec.height;
+           player.rec.y = screenHeight - player.rec.height;
         }
     }
     else
@@ -243,34 +425,41 @@ void DrawGame( void )
 
     if ( !gameOver )
     {
-        DrawRectangleRec( player.rec, player.color );
 
-        DrawLineV( player.startLinePos, player.endLinePos, RED );
+       DrawRectangleRec( board.rec, board.color );
 
-        DrawText( "Private Parts",
-                  screenWidth / 2 - MeasureText( "Private Parts", 40 ) / 2,
-                  screenHeight / 2 - 40, 40, Fade( BLACK, alpha ) );
+       DrawRectangleRec( player.rec, player.color );
 
-        DrawText( TextFormat( "%04i", score ), 20, 20, 40, GRAY );
-        // Draw Variables
-        TraceLog( LOG_INFO, "----------------------------------------" );
-        TraceLog( LOG_INFO, "Alpha:         %f", alpha );
-        TraceLog( LOG_INFO, "DeawingStart x:  %d", player.startLinePos.x );
-        TraceLog( LOG_INFO, "DeawingStart y:  %d", player.startLinePos.y );
-        TraceLog( LOG_INFO, "DeawingEND x:    %d", player.endLinePos.x );
-        TraceLog( LOG_INFO, "DeawingEND y:    %d", player.endLinePos.y );
-        TraceLog( LOG_INFO, "GetMasterVolume:        %d", GetMasterVolume() );
-        TraceLog( LOG_INFO, "++++++++++++++++++++++++++++++++++++++++" );
+       DrawLineV( player.startLinePos, player.endLinePos, RED );
 
-        if ( victory )
-            DrawText( "YOU WIN",
-                      screenWidth / 2 - MeasureText( "YOU WIN", 40 ) / 2,
-                      screenHeight / 2 - 40, 40, BLACK );
+       DrawText( "WTF",
+                 screenWidth / 2 - MeasureText( "Private Parts", 40 ) / 2,
+                 screenHeight / 2 - 40, 40, Fade( BLACK, alpha ) );
 
-        if ( pause )
-            DrawText( "GAME PAUSED",
-                      screenWidth / 2 - MeasureText( "GAME PAUSED", 40 ) / 2,
-                      screenHeight / 2 - 40, 40, GRAY );
+       DrawText( TextFormat( "%04i", score ), 20, 20, 40, GRAY );
+       // Draw Variables
+       TraceLog( LOG_INFO, "----------------------------------------" );
+       TraceLog( LOG_INFO, "Alpha:         %f", alpha );
+       TraceLog( LOG_INFO, "DeawingStart x:  %f", player.startLinePos.x );
+       TraceLog( LOG_INFO, "DeawingStart y:  %f", player.startLinePos.y );
+       TraceLog( LOG_INFO, "DeawingEND x:    %f", player.endLinePos.x );
+       TraceLog( LOG_INFO, "DeawingEND y:    %f", player.endLinePos.y );
+       TraceLog( LOG_INFO, "GetMasterVolume:        %d", GetMasterVolume() );
+       TraceLog( LOG_INFO, "board.rec.x:        %f", board.rec.x );
+       TraceLog( LOG_INFO, "board.rec.y:        %f", board.rec.y );
+       TraceLog( LOG_INFO, "player.rec.x:         %f", player.rec.x );
+       TraceLog( LOG_INFO, "player.rec.y:         %f", player.rec.y );
+       TraceLog( LOG_INFO, "++++++++++++++++++++++++++++++++++++++++" );
+
+       if ( victory )
+          DrawText( "YOU WIN",
+                    screenWidth / 2 - MeasureText( "YOU WIN", 40 ) / 2,
+                    screenHeight / 2 - 40, 40, BLACK );
+
+       if ( pause )
+          DrawText( "GAME PAUSED",
+                    screenWidth / 2 - MeasureText( "GAME PAUSED", 40 ) / 2,
+                    screenHeight / 2 - 40, 40, GRAY );
     }
     else
     {
@@ -289,3 +478,21 @@ void UnloadGame( void )
     // TODO: Unload all dynamic loaded data (textures, sounds, models...)
 }
 
+//--------------------------------------------------------------------------------------
+/// Function to get bigger rectangle
+/// return 1 if rec1 is bigger
+/// return 2 if rec2 is bigger
+/// return 0 if equal
+static int isRecBigger( const Rectangle* rec1, const Rectangle* rec2 )
+{
+   if ( ( rec1->width * rec1->height ) > ( rec2->width * rec2->height ) )
+   {
+      return 1;
+   }
+   if ( ( rec1->width * rec1->height ) < ( rec2->width * rec2->height ) )
+   {
+      return 2;
+   }
+
+   return 0;
+}
